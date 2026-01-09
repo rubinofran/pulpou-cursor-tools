@@ -1,0 +1,147 @@
+{
+  "tableName": "peticiones",
+  "fields": [
+    {
+      "name": "id",
+      "label": "id",
+      "type": "text",
+      "default": "NULL",
+      "editable": false,
+      "fromCSV": false,
+      "required": false
+    },
+    {
+      "name": "id_site",
+      "label": "id_site",
+      "type": "text",
+      "default": "",
+      "editable": true,
+      "fromCSV": false,
+      "required": false,
+      "placeholder": "Ej: 1"
+    },
+    {
+      "name": "max_page",
+      "label": "max_page",
+      "type": "text",
+      "default": "",
+      "editable": true,
+      "fromCSV": false,
+      "required": false,
+      "placeholder": "Ej: 10"
+    },
+    {
+      "name": "id_type",
+      "label": "id_type",
+      "type": "text",
+      "default": "",
+      "editable": true,
+      "fromCSV": false,
+      "required": false,
+      "placeholder": "Ej: 1"
+    },
+    {
+      "name": "id_consultMethod",
+      "label": "id_consultMethod",
+      "type": "text",
+      "default": "",
+      "editable": true,
+      "fromCSV": false,
+      "required": false,
+      "placeholder": "Ej: 1"
+    },
+    {
+      "name": "id_frecuency",
+      "label": "id_frecuency",
+      "type": "text",
+      "default": "",
+      "editable": true,
+      "fromCSV": false,
+      "required": false,
+      "placeholder": "Ej: 1"
+    },
+    {
+      "name": "url",
+      "label": "url",
+      "type": "text",
+      "default": "",
+      "editable": false,
+      "fromCSV": true,
+      "required": false,
+      "isURL": true
+    },
+    {
+      "name": "options",
+      "label": "options",
+      "type": "text",
+      "default": "{}",
+      "editable": true,
+      "fromCSV": false,
+      "required": false,
+      "placeholder": "{}"
+    },
+    {
+      "name": "description",
+      "label": "description",
+      "type": "text",
+      "default": "",
+      "editable": true,
+      "fromCSV": false,
+      "required": false,
+      "placeholder": "Descripción"
+    },
+    {
+      "name": "msj",
+      "label": "msj",
+      "type": "text",
+      "default": "NULL",
+      "editable": true,
+      "fromCSV": false,
+      "required": false,
+      "placeholder": "NULL"
+    },
+    {
+      "name": "activo",
+      "label": "activo",
+      "type": "select",
+      "default": "no",
+      "editable": true,
+      "fromCSV": false,
+      "required": false,
+      "options": [
+        { "value": "no", "label": "no" },
+        { "value": "si", "label": "si" }
+      ]
+    },
+    {
+      "name": "cant_especulada",
+      "label": "cant_especulada",
+      "type": "text",
+      "default": "",
+      "editable": true,
+      "fromCSV": false,
+      "required": false,
+      "placeholder": "Ej: 0"
+    },
+    {
+      "name": "fecha_update",
+      "label": "fecha_update",
+      "type": "text",
+      "default": "",
+      "editable": true,
+      "fromCSV": false,
+      "required": false,
+      "placeholder": "NULL o fecha"
+    },
+    {
+      "name": "path_toma",
+      "label": "path_toma",
+      "type": "text",
+      "default": "",
+      "editable": true,
+      "fromCSV": false,
+      "required": false,
+      "placeholder": "NULL o path"
+    }
+  ]
+}

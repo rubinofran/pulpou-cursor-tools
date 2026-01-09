@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Queries Insert - CSV Link Viewer</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-content">
+                <div class="header-text">
+                    <h1>📄 Queries Insert</h1>
+                    <p class="subtitle">Carga un archivo CSV y visualiza los links</p>
+                </div>
+                <div class="upload-section">
+                    <div class="upload-area" id="uploadArea">
+                        <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" hidden>
+                        <div class="upload-content">
+                            <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="17 8 12 3 7 8"></polyline>
+                                <line x1="12" y1="3" x2="12" y2="15"></line>
+                            </svg>
+                            <p class="upload-text">Haz clic para seleccionar un archivo CSV o XLSX</p>
+                            <p class="upload-hint">o arrastra y suelta el archivo aquí</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <div class="controls-section" id="controlsSection" style="display: none;">
+            <div class="csv-preview-section">
+                <h3>📊 Preview del CSV</h3>
+                <div class="csv-preview" id="csvPreview"></div>
+            </div>
+            <div class="controls-section-row">
+                <div class="column-selector">
+                    <label for="columnSelect">Selecciona la columna con links:</label>
+                    <select id="columnSelect"></select>
+                </div>
+                <div class="stats">
+                    <span id="totalLinks">0 links encontrados</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="results-section" id="resultsSection" style="display: none;">
+            <div class="sql-config-section">
+                <div class="sql-config-header">
+                    <h2>⚙️ Valores por Defecto (Globales)</h2>
+                    <button class="btn-config-link" id="toggleConfigBtn">⚙️ Configurar</button>
+                </div>
+                <div class="sql-config-form" id="sqlConfigForm" style="display: none;">
+                    <p class="config-hint">Estos valores se aplicarán a todos los links. Puedes personalizar cada link individualmente más abajo.</p>
+                    <div class="form-grid" id="globalFormGrid"></div>
+                </div>
+            </div>
+
+            <div class="generate-section">
+                <button class="btn-generate" id="generateQueriesBtn">Generar Insert</button>
+                <button class="btn-copy" id="copyQueriesBtn" style="display: none;">📋 Copiar Queries</button>
+            </div>
+
+            <div class="results-header">
+                <h2>Links encontrados</h2>
+            </div>
+            <div class="links-table-container">
+                <table class="links-table">
+                    <thead>
+                        <tr>
+                            <th>Fila</th>
+                            <th>Links</th>
+                            <th>Valores</th>
+                        </tr>
+                    </thead>
+                    <tbody id="linksContainer"></tbody>
+                </table>
+            </div>
+
+            <div class="queries-section" id="queriesSection" style="display: none;">
+                <div class="queries-header">
+                    <h2>📝 Queries SQL Generadas</h2>
+                    <div class="queries-actions">
+                        <span id="queriesCount">0 queries</span>
+                        <button class="btn-download" id="downloadQueriesBtn">💾 Descargar .txt</button>
+                    </div>
+                </div>
+                <div class="queries-container" id="queriesContainer"></div>
+            </div>
+        </div>
+
+        <div class="error-message" id="errorMessage" style="display: none;"></div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
