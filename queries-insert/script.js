@@ -3,7 +3,6 @@ const uploadArea = document.getElementById('uploadArea');
 const fileInput = document.getElementById('fileInput');
 const controlsSection = document.getElementById('controlsSection');
 const resultsSection = document.getElementById('resultsSection');
-const columnSelect = document.getElementById('columnSelect');
 const linksContainer = document.getElementById('linksContainer');
 const totalLinksSpan = document.getElementById('totalLinks');
 const errorMessage = document.getElementById('errorMessage');
@@ -24,12 +23,23 @@ let links = [];
 let generatedQueries = [];
 let generatedQueriesFormatted = '';
 let tableConfig = null;
+let tagsConfig = null;
 
 // Load table configuration
 async function loadTableConfig() {
     try {
         const response = await fetch('config.json');
         tableConfig = await response.json();
+        
+        // Load tags configuration
+        try {
+            const tagsResponse = await fetch('tags-config.json');
+            tagsConfig = await tagsResponse.json();
+        } catch (error) {
+            console.warn('tags-config.json not found, tags feature will be disabled');
+            tagsConfig = { columnMappings: [] };
+        }
+        
         initializeForms();
     } catch (error) {
         console.error('Error loading config.json:', error);
@@ -52,9 +62,58 @@ function generateGlobalForm() {
     
     formGrid.innerHTML = '';
     
+    // First, add the options checkbox at the beginning
+    const optionsField = tableConfig.fields.find(f => f.name === 'options');
+    if (optionsField && optionsField.editable && !optionsField.fromCSV) {
+        // Create checkbox for "con etiquetas" at the start
+        const checkboxGroup = document.createElement('div');
+        checkboxGroup.className = 'form-group options-checkbox-group';
+        
+        const checkboxLabel = document.createElement('label');
+        checkboxLabel.className = 'checkbox-label';
+        checkboxLabel.setAttribute('for', `sqlOptionsWithTags`);
+        
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.id = `sqlOptionsWithTags`;
+        checkbox.className = 'options-checkbox';
+        checkbox.checked = false; // Default: sin etiquetas
+        
+        checkboxLabel.appendChild(checkbox);
+        const checkboxText = document.createTextNode(' Campo options con etiquetas');
+        checkboxLabel.appendChild(checkboxText);
+        
+        checkboxGroup.appendChild(checkboxLabel);
+        formGrid.appendChild(checkboxGroup);
+    }
+    
     tableConfig.fields.forEach(field => {
         // Skip fields that are not editable or come from CSV
         if (!field.editable || field.fromCSV) return;
+        
+        // Special handling for options field: input as normal field
+        if (field.name === 'options') {
+            // Create input field for JSON adicionales as a normal field
+            const inputGroup = document.createElement('div');
+            inputGroup.className = 'form-group';
+            
+            const inputLabel = document.createElement('label');
+            inputLabel.setAttribute('for', 'sqlOptionsExtra');
+            inputLabel.textContent = 'options:';
+            
+            const extraInput = document.createElement('input');
+            extraInput.type = 'text';
+            extraInput.id = 'sqlOptionsExtra';
+            extraInput.className = 'global-field';
+            extraInput.placeholder = 'Ej: "codigoPostal":"02006"';
+            extraInput.title = 'Ingresa campos JSON adicionales separados por comas. Ejemplo: "codigoPostal":"02006", "otroCampo":"valor"';
+            
+            inputGroup.appendChild(inputLabel);
+            inputGroup.appendChild(extraInput);
+            formGrid.appendChild(inputGroup);
+            
+            return; // Skip normal processing for options
+        }
         
         const formGroup = document.createElement('div');
         formGroup.className = 'form-group';
@@ -102,16 +161,30 @@ function generateGlobalForm() {
 }
 
 // Event Listeners
-uploadArea.addEventListener('click', () => fileInput.click());
-uploadArea.addEventListener('dragover', handleDragOver);
-uploadArea.addEventListener('drop', handleDrop);
-uploadArea.addEventListener('dragleave', handleDragLeave);
-fileInput.addEventListener('change', handleFileSelect);
-columnSelect.addEventListener('change', handleColumnChange);
-toggleConfigBtn.addEventListener('click', toggleConfigForm);
-generateQueriesBtn.addEventListener('click', generateSQLQueries);
-copyQueriesBtn.addEventListener('click', copyAllQueries);
-downloadQueriesBtn.addEventListener('click', downloadQueriesAsTxt);
+if (uploadArea && fileInput) {
+    uploadArea.addEventListener('click', () => {
+        if (fileInput) {
+            fileInput.click();
+        }
+    });
+    uploadArea.addEventListener('dragover', handleDragOver);
+    uploadArea.addEventListener('drop', handleDrop);
+    uploadArea.addEventListener('dragleave', handleDragLeave);
+    fileInput.addEventListener('change', handleFileSelect);
+}
+
+if (toggleConfigBtn) {
+    toggleConfigBtn.addEventListener('click', toggleConfigForm);
+}
+if (generateQueriesBtn) {
+    generateQueriesBtn.addEventListener('click', generateSQLQueries);
+}
+if (copyQueriesBtn) {
+    copyQueriesBtn.addEventListener('click', copyAllQueries);
+}
+if (downloadQueriesBtn) {
+    downloadQueriesBtn.addEventListener('click', downloadQueriesAsTxt);
+}
 
 // Drag and Drop handlers
 function handleDragOver(e) {
@@ -230,21 +303,24 @@ function parseExcelData(jsonData) {
         }
     }
     
-    // Populate column selector
-    populateColumnSelector();
-    
-    // Ensure selector is enabled
-    if (columnSelect) {
-        columnSelect.disabled = false;
+    // Find and validate "url" column
+    const urlColumnIndex = findUrlColumn();
+    if (urlColumnIndex === -1) {
+        showError('El archivo Excel debe contener una columna llamada "url"');
+        return;
     }
+    
+    selectedColumn = urlColumnIndex;
     
     // Show CSV preview
     displayCSVPreview();
     
-    // Auto-detect link column
-    autoDetectLinkColumn();
+    // Extract and display links
+    extractLinks();
+    displayLinks();
     
     controlsSection.style.display = 'block';
+    resultsSection.style.display = 'block';
 }
 
 // Parse CSV text
@@ -289,21 +365,34 @@ function parseCSV(text) {
         }
     }
     
-    // Populate column selector
-    populateColumnSelector();
-    
-    // Ensure selector is enabled
-    if (columnSelect) {
-        columnSelect.disabled = false;
+    // Find and validate "url" column
+    const urlColumnIndex = findUrlColumn();
+    if (urlColumnIndex === -1) {
+        showError('El archivo CSV debe contener una columna llamada "url"');
+        return;
     }
+    
+    selectedColumn = urlColumnIndex;
     
     // Show CSV preview
     displayCSVPreview();
     
-    // Auto-detect link column
-    autoDetectLinkColumn();
+    // Extract and display links
+    extractLinks();
+    displayLinks();
     
     controlsSection.style.display = 'block';
+    resultsSection.style.display = 'block';
+}
+
+// Find URL column index
+function findUrlColumn() {
+    for (let i = 0; i < headers.length; i++) {
+        if (headers[i].toLowerCase().trim() === 'url') {
+            return i;
+        }
+    }
+    return -1;
 }
 
 // Parse a single CSV line (handles quoted values)
@@ -344,6 +433,16 @@ function parseCSVLine(line, delimiter) {
 }
 
 // Display CSV preview
+// Check if a column name is configured as a tag in tags-config.json
+function isTagColumn(columnName) {
+    if (!tagsConfig || !tagsConfig.columnMappings) return false;
+    
+    const normalizedColumn = columnName.toLowerCase().trim();
+    return tagsConfig.columnMappings.some(mapping => 
+        mapping.csvColumn.toLowerCase().trim() === normalizedColumn
+    );
+}
+
 function displayCSVPreview() {
     if (!csvPreview) return;
     
@@ -354,7 +453,10 @@ function displayCSVPreview() {
     
     // Headers
     headers.forEach((header, index) => {
-        previewHTML += `<th>${header || `Columna ${index + 1}`}</th>`;
+        const headerText = header || `Columna ${index + 1}`;
+        const isTag = isTagColumn(header);
+        const tagIcon = isTag ? ' <span class="tag-indicator" title="Esta columna se usa para generar etiquetas">🏷️</span>' : '';
+        previewHTML += `<th>${headerText}${tagIcon}</th>`;
     });
     previewHTML += '</tr></thead><tbody>';
     
@@ -378,59 +480,6 @@ function displayCSVPreview() {
     csvPreview.innerHTML = previewHTML;
 }
 
-// Populate column selector dropdown
-function populateColumnSelector() {
-    if (!columnSelect) {
-        console.error('columnSelect element not found');
-        return;
-    }
-    
-    columnSelect.innerHTML = '';
-    columnSelect.disabled = false;
-    
-    headers.forEach((header, index) => {
-        const option = document.createElement('option');
-        option.value = index;
-        option.textContent = header || `Columna ${index + 1}`;
-        columnSelect.appendChild(option);
-    });
-}
-
-// Auto-detect column with links
-function autoDetectLinkColumn() {
-    for (let colIndex = 0; colIndex < headers.length; colIndex++) {
-        const header = headers[colIndex].toLowerCase();
-        
-        // Check if header suggests links
-        if (header.includes('link') || header.includes('url') || header.includes('href')) {
-            columnSelect.value = colIndex;
-            handleColumnChange();
-            return;
-        }
-        
-        // Check if column values look like URLs
-        let urlCount = 0;
-        for (let row of csvData) {
-            if (row[colIndex] && isValidURL(row[colIndex])) {
-                urlCount++;
-            }
-        }
-        
-        // If more than 50% of values are URLs, select this column
-        if (urlCount > csvData.length * 0.5) {
-            columnSelect.value = colIndex;
-            handleColumnChange();
-            return;
-        }
-    }
-    
-    // If no auto-detection, select first column
-    if (headers.length > 0) {
-        columnSelect.value = 0;
-        handleColumnChange();
-    }
-}
-
 // Validate URL
 function isValidURL(str) {
     try {
@@ -441,13 +490,6 @@ function isValidURL(str) {
         const urlPattern = /^(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)*\/?$/i;
         return urlPattern.test(str);
     }
-}
-
-// Handle column selection change
-function handleColumnChange() {
-    selectedColumn = parseInt(columnSelect.value);
-    extractLinks();
-    displayLinks();
 }
 
 // Extract links from selected column
@@ -476,7 +518,8 @@ function extractLinks() {
             links.push({
                 url: url,
                 original: value.trim(),
-                rowIndex: rowIndex + 2 // +2 because of header and 0-index
+                rowIndex: rowIndex + 2, // +2 because of header and 0-index (for display)
+                csvRowIndex: rowIndex // Actual index in csvData array
             });
         }
     });
@@ -745,15 +788,20 @@ function generateSQLQueries() {
     const globalValues = {};
     tableConfig.fields.forEach(field => {
         if (!field.fromCSV) {
-            const fieldId = `sql${field.name.charAt(0).toUpperCase() + field.name.slice(1)}`;
-            let value = getGlobalFormValue(fieldId);
-            
-            // Apply defaults if empty
-            if (value === '' && field.default !== undefined && field.default !== '') {
-                value = field.default;
+            // Special handling for options field
+            if (field.name === 'options') {
+                globalValues[field.name] = getOptionsValue();
+            } else {
+                const fieldId = `sql${field.name.charAt(0).toUpperCase() + field.name.slice(1)}`;
+                let value = getGlobalFormValue(fieldId);
+                
+                // Apply defaults if empty
+                if (value === '' && field.default !== undefined && field.default !== '') {
+                    value = field.default;
+                }
+                
+                globalValues[field.name] = value;
             }
-            
-            globalValues[field.name] = value;
         }
     });
 
@@ -770,6 +818,32 @@ function generateSQLQueries() {
                 mergedValues[key] = individualValues[key];
             }
         });
+        
+        // Handle options field: combine tags (if applicable) with extra JSON fields
+        const optionsField = tableConfig.fields.find(f => f.name === 'options');
+        if (optionsField) {
+            const extraOptions = getExtraOptionsValue();
+            let optionsObj = {};
+            
+            if (mergedValues.options === '{"tags":[]}') {
+                // "Con etiquetas": generate tags from CSV + merge with extra fields
+                const tags = generateTagsFromCSV(link.csvRowIndex);
+                optionsObj = { tags: tags, ...extraOptions };
+            } else if (mergedValues.options === '{}') {
+                // "Sin etiquetas": only extra fields (or empty object)
+                optionsObj = extraOptions;
+            } else {
+                // Custom value: try to parse and merge
+                try {
+                    optionsObj = JSON.parse(mergedValues.options);
+                    Object.assign(optionsObj, extraOptions);
+                } catch (e) {
+                    optionsObj = extraOptions;
+                }
+            }
+            
+            mergedValues.options = JSON.stringify(optionsObj);
+        }
         
         // Ensure defaults are applied from config
         tableConfig.fields.forEach(field => {
@@ -812,6 +886,120 @@ function generateSQLQueries() {
     
     // Scroll to queries section
     queriesSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+// Parse extra JSON fields from input string
+function parseExtraOptionsInput(inputText) {
+    if (!inputText || inputText.trim() === '') {
+        return {};
+    }
+    
+    const trimmed = inputText.trim();
+    
+    // If it's already a valid JSON object, parse it directly
+    if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+        try {
+            return JSON.parse(trimmed);
+        } catch (e) {
+            console.warn('Error parsing JSON object:', e);
+            return {};
+        }
+    }
+    
+    // Otherwise, wrap it in braces to make it valid JSON
+    // User can enter: "codigoPostal":"02006" or codigoPostal:02006
+    try {
+        const jsonStr = `{${trimmed}}`;
+        return JSON.parse(jsonStr);
+    } catch (e) {
+        // If parsing fails, try to parse key-value pairs manually
+        try {
+            const result = {};
+            // Split by comma, but be careful with commas inside quoted values
+            const pairs = [];
+            let current = '';
+            let inQuotes = false;
+            
+            for (let i = 0; i < trimmed.length; i++) {
+                const char = trimmed[i];
+                if (char === '"' && (i === 0 || trimmed[i-1] !== '\\')) {
+                    inQuotes = !inQuotes;
+                } else if (char === ',' && !inQuotes) {
+                    pairs.push(current.trim());
+                    current = '';
+                    continue;
+                }
+                current += char;
+            }
+            if (current) pairs.push(current.trim());
+            
+            pairs.forEach(pair => {
+                // Match: "key":"value" or key:"value" or "key":value
+                const match = pair.match(/^"?([^"]+)"?\s*:\s*"?([^"]*)"?$/);
+                if (match) {
+                    const key = match[1].trim().replace(/^"|"$/g, '');
+                    const value = match[2].trim().replace(/^"|"$/g, '');
+                    result[key] = value;
+                }
+            });
+            
+            return result;
+        } catch (e2) {
+            console.warn('Error parsing extra options:', e2);
+            return {};
+        }
+    }
+}
+
+// Get extra options input value
+function getExtraOptionsValue() {
+    const extraInput = document.getElementById('sqlOptionsExtra');
+    if (!extraInput) return {};
+    return parseExtraOptionsInput(extraInput.value.trim());
+}
+
+// Get options value (combines checkbox and extra input)
+function getOptionsValue() {
+    const withTagsCheckbox = document.getElementById('sqlOptionsWithTags');
+    const extraInput = document.getElementById('sqlOptionsExtra');
+    
+    const withTags = withTagsCheckbox ? withTagsCheckbox.checked : false;
+    const extraOptions = extraInput ? parseExtraOptionsInput(extraInput.value.trim()) : {};
+    
+    if (withTags) {
+        // Will be filled with tags from CSV later
+        return '{"tags":[]}';
+    } else {
+        // Sin etiquetas: only extra fields
+        return Object.keys(extraOptions).length > 0 ? JSON.stringify(extraOptions) : '{}';
+    }
+}
+
+// Generate tags from CSV columns based on tags-config.json
+function generateTagsFromCSV(csvRowIndex) {
+    if (!tagsConfig || !tagsConfig.columnMappings || tagsConfig.columnMappings.length === 0) {
+        return [];
+    }
+    
+    if (csvRowIndex < 0 || csvRowIndex >= csvData.length) {
+        return [];
+    }
+    
+    const row = csvData[csvRowIndex];
+    const tags = [];
+    
+    tagsConfig.columnMappings.forEach(mapping => {
+        // Find the column index in headers
+        const columnIndex = headers.findIndex(h => h.toLowerCase().trim() === mapping.csvColumn.toLowerCase().trim());
+        
+        if (columnIndex !== -1 && row[columnIndex] && row[columnIndex].trim() !== '') {
+            const value = row[columnIndex].trim();
+            const tag = `${mapping.tagPrefix}: ${value}`;
+            tags.push(tag);
+        }
+    });
+    
+    return tags;
 }
 
 // Get global form value (returns empty string if empty, not NULL)
@@ -876,6 +1064,13 @@ function buildValuesString(values) {
                 return "''";
             }
             return 'NULL';
+        }
+        
+        // Handle options field (JSON) - escape both single and double quotes
+        if (field.name === 'options') {
+            // Escape single quotes for SQL (JSON may contain single quotes in strings)
+            const escaped = val.replace(/'/g, "''");
+            return `'${escaped}'`;
         }
         
         // Handle select fields (like activo)

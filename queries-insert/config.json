@@ -24,7 +24,7 @@
       "name": "max_page",
       "label": "max_page",
       "type": "text",
-      "default": "",
+      "default": "1",
       "editable": true,
       "fromCSV": false,
       "required": false,
@@ -73,12 +73,15 @@
     {
       "name": "options",
       "label": "options",
-      "type": "text",
+      "type": "select",
       "default": "{}",
       "editable": true,
       "fromCSV": false,
       "required": false,
-      "placeholder": "{}"
+      "options": [
+        { "value": "{}", "label": "Sin etiquetas" },
+        { "value": "{\"tags\":[]}", "label": "Con etiquetas" }
+      ]
     },
     {
       "name": "description",
@@ -117,7 +120,7 @@
       "name": "cant_especulada",
       "label": "cant_especulada",
       "type": "text",
-      "default": "",
+      "default": "1",
       "editable": true,
       "fromCSV": false,
       "required": false,

@@ -66,6 +66,12 @@ header h1 {
     transition: all 0.3s ease;
     background: rgba(255, 255, 255, 0.1);
     backdrop-filter: blur(10px);
+    position: relative;
+    pointer-events: auto;
+}
+
+.upload-content {
+    pointer-events: none;
 }
 
 .upload-area:hover {
@@ -147,6 +153,13 @@ header h1 {
     font-weight: 600;
     font-size: 0.9rem;
     white-space: nowrap;
+}
+
+.tag-indicator {
+    margin-left: 5px;
+    font-size: 0.85rem;
+    opacity: 0.8;
+    vertical-align: middle;
 }
 
 .preview-table td {
@@ -535,6 +548,13 @@ header h1 {
     margin-bottom: 20px;
 }
 
+/* Options checkbox group should span full width but be compact */
+.options-checkbox-group {
+    grid-column: 1 / -1;
+    padding: 8px 0;
+    margin-bottom: -5px;
+}
+
 .form-group {
     display: flex;
     flex-direction: column;
@@ -547,15 +567,47 @@ header h1 {
     font-size: 0.9rem;
 }
 
-.form-group input {
+.form-group input,
+.form-group select {
     padding: 10px 12px;
     border: 2px solid #e0e0e0;
     border-radius: 6px;
     font-size: 0.95rem;
     transition: all 0.3s ease;
+    background: white;
 }
 
-.form-group input:focus {
+.form-group select {
+    cursor: pointer;
+}
+
+/* Options checkbox styling */
+.options-checkbox-group {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    font-weight: 500;
+    color: #555;
+    font-size: 0.9rem;
+    margin-bottom: 0;
+}
+
+.options-checkbox {
+    width: 18px;
+    height: 18px;
+    margin-right: 8px;
+    cursor: pointer;
+    accent-color: #667eea;
+}
+
+.form-group input:focus,
+.form-group select:focus {
     outline: none;
     border-color: #667eea;
     box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
