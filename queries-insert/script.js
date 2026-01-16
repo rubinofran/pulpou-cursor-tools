@@ -85,6 +85,27 @@ function generateGlobalForm() {
         
         checkboxGroup.appendChild(checkboxLabel);
         formGrid.appendChild(checkboxGroup);
+        
+        // Add checkbox for "Campo options completo"
+        const fullOptionsCheckboxGroup = document.createElement('div');
+        fullOptionsCheckboxGroup.className = 'form-group options-checkbox-group';
+        
+        const fullOptionsCheckboxLabel = document.createElement('label');
+        fullOptionsCheckboxLabel.className = 'checkbox-label';
+        fullOptionsCheckboxLabel.setAttribute('for', 'sqlOptionsFull');
+        
+        const fullOptionsCheckbox = document.createElement('input');
+        fullOptionsCheckbox.type = 'checkbox';
+        fullOptionsCheckbox.id = 'sqlOptionsFull';
+        fullOptionsCheckbox.className = 'options-checkbox';
+        fullOptionsCheckbox.checked = false; // Default: desactivado
+        
+        fullOptionsCheckboxLabel.appendChild(fullOptionsCheckbox);
+        const fullOptionsCheckboxText = document.createTextNode(' Campo options completo');
+        fullOptionsCheckboxLabel.appendChild(fullOptionsCheckboxText);
+        
+        fullOptionsCheckboxGroup.appendChild(fullOptionsCheckboxLabel);
+        formGrid.appendChild(fullOptionsCheckboxGroup);
     }
     
     tableConfig.fields.forEach(field => {
@@ -395,6 +416,17 @@ function findUrlColumn() {
     return -1;
 }
 
+// Find cantEspeculada column index (case-insensitive, handles camelCase, snake_case, etc.)
+function findCantEspeculadaColumn() {
+    for (let i = 0; i < headers.length; i++) {
+        const normalizedHeader = headers[i].toLowerCase().trim().replace(/[_-]/g, '');
+        if (normalizedHeader === 'cantespeculada' || normalizedHeader === 'cant especulada') {
+            return i;
+        }
+    }
+    return -1;
+}
+
 // Parse a single CSV line (handles quoted values)
 function parseCSVLine(line, delimiter) {
     const result = [];
@@ -443,6 +475,12 @@ function isTagColumn(columnName) {
     );
 }
 
+// Check if a column is cantEspeculada (used for default value)
+function isCantEspeculadaColumn(columnName) {
+    const normalizedColumn = columnName.toLowerCase().trim().replace(/[_-]/g, '').replace(/\s+/g, '');
+    return normalizedColumn === 'cantespeculada';
+}
+
 function displayCSVPreview() {
     if (!csvPreview) return;
     
@@ -455,8 +493,10 @@ function displayCSVPreview() {
     headers.forEach((header, index) => {
         const headerText = header || `Columna ${index + 1}`;
         const isTag = isTagColumn(header);
+        const isCantEspeculada = isCantEspeculadaColumn(header);
         const tagIcon = isTag ? ' <span class="tag-indicator" title="Esta columna se usa para generar etiquetas">🏷️</span>' : '';
-        previewHTML += `<th>${headerText}${tagIcon}</th>`;
+        const cantEspeculadaIcon = isCantEspeculada ? ' <span class="tag-indicator" title="Esta columna se usa como valor por defecto para cant_especulada">🔢</span>' : '';
+        previewHTML += `<th>${headerText}${tagIcon}${cantEspeculadaIcon}</th>`;
     });
     previewHTML += '</tr></thead><tbody>';
     
@@ -496,6 +536,9 @@ function isValidURL(str) {
 function extractLinks() {
     links = [];
     
+    // Find cantEspeculada column if it exists
+    const cantEspeculadaColumnIndex = findCantEspeculadaColumn();
+    
     csvData.forEach((row, rowIndex) => {
         const value = row[selectedColumn];
         if (value && value.trim() !== '') {
@@ -515,12 +558,19 @@ function extractLinks() {
                 // If it doesn't look like a domain, keep it as is (could be a number, text, etc.)
             }
             
-            links.push({
+            const linkData = {
                 url: url,
                 original: value.trim(),
                 rowIndex: rowIndex + 2, // +2 because of header and 0-index (for display)
                 csvRowIndex: rowIndex // Actual index in csvData array
-            });
+            };
+            
+            // Add cantEspeculada value if column exists
+            if (cantEspeculadaColumnIndex !== -1 && row[cantEspeculadaColumnIndex] && row[cantEspeculadaColumnIndex].trim() !== '') {
+                linkData.cantEspeculada = row[cantEspeculadaColumnIndex].trim();
+            }
+            
+            links.push(linkData);
         }
     });
     
@@ -823,22 +873,32 @@ function generateSQLQueries() {
         const optionsField = tableConfig.fields.find(f => f.name === 'options');
         if (optionsField) {
             const extraOptions = getExtraOptionsValue();
+            const fullOptionsCheckbox = document.getElementById('sqlOptionsFull');
+            const useFullOptions = fullOptionsCheckbox ? fullOptionsCheckbox.checked : false;
+            
             let optionsObj = {};
+            
+            // If "Campo options completo" is checked, add all CSV columns first
+            if (useFullOptions) {
+                const csvColumns = getAllCSVColumnsForRow(link.csvRowIndex);
+                Object.assign(optionsObj, csvColumns);
+            }
             
             if (mergedValues.options === '{"tags":[]}') {
                 // "Con etiquetas": generate tags from CSV + merge with extra fields
                 const tags = generateTagsFromCSV(link.csvRowIndex);
-                optionsObj = { tags: tags, ...extraOptions };
+                optionsObj = { ...optionsObj, tags: tags, ...extraOptions };
             } else if (mergedValues.options === '{}') {
-                // "Sin etiquetas": only extra fields (or empty object)
-                optionsObj = extraOptions;
+                // "Sin etiquetas": merge with extra fields (or keep CSV columns if full options is enabled)
+                Object.assign(optionsObj, extraOptions);
             } else {
                 // Custom value: try to parse and merge
                 try {
-                    optionsObj = JSON.parse(mergedValues.options);
+                    const parsedOptions = JSON.parse(mergedValues.options);
+                    Object.assign(optionsObj, parsedOptions);
                     Object.assign(optionsObj, extraOptions);
                 } catch (e) {
-                    optionsObj = extraOptions;
+                    Object.assign(optionsObj, extraOptions);
                 }
             }
             
@@ -856,6 +916,13 @@ function generateSQLQueries() {
         const urlField = tableConfig.fields.find(f => f.fromCSV && f.isURL);
         if (urlField) {
             mergedValues[urlField.name] = link.url;
+        }
+        
+        // Handle cant_especulada field (from CSV if exists, otherwise use default)
+        const cantEspeculadaField = tableConfig.fields.find(f => f.name === 'cant_especulada');
+        if (cantEspeculadaField && link.cantEspeculada !== undefined) {
+            // Use value from CSV if available
+            mergedValues[cantEspeculadaField.name] = link.cantEspeculada;
         }
         
         // Build VALUES string for this link
@@ -1000,6 +1067,40 @@ function generateTagsFromCSV(csvRowIndex) {
     });
     
     return tags;
+}
+
+// Get all CSV columns (except "url", tag columns, and cantEspeculada) for a specific row as an object
+function getAllCSVColumnsForRow(csvRowIndex) {
+    if (csvRowIndex < 0 || csvRowIndex >= csvData.length) {
+        return {};
+    }
+    
+    const row = csvData[csvRowIndex];
+    const columnsObj = {};
+    
+    headers.forEach((header, index) => {
+        // Skip "url" column
+        if (header.toLowerCase().trim() === 'url') {
+            return;
+        }
+        
+        // Skip columns that are configured as tags in tags-config.json
+        if (isTagColumn(header)) {
+            return;
+        }
+        
+        // Skip cantEspeculada column (it's used for the cant_especulada field, not for options)
+        if (isCantEspeculadaColumn(header)) {
+            return;
+        }
+        
+        // Add column if it has a value
+        if (row[index] && row[index].trim() !== '') {
+            columnsObj[header] = row[index].trim();
+        }
+    });
+    
+    return columnsObj;
 }
 
 // Get global form value (returns empty string if empty, not NULL)

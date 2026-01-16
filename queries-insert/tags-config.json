@@ -1,15 +1,15 @@
 {
   "columnMappings": [
     {
-      "csvColumn": "category",
+      "csvColumn": "tags-category",
       "tagPrefix": "CATEGORY"
     },
     {
-        "csvColumn": "subcategory",
+        "csvColumn": "tags-subcategory",
         "tagPrefix": "SUBCATEGORY"
       },
       {
-        "csvColumn": "brand",
+        "csvColumn": "tags-brand",
         "tagPrefix": "BRAND"
       }
   ]
