@@ -357,10 +357,27 @@ function parseCSV(text) {
     }
     
     // Detect delimiter (comma or semicolon)
-    // Count occurrences in first line
+    // Count occurrences in first line, ignoring those inside quotes
     const firstLine = lines[0];
-    const commaCount = (firstLine.match(/,/g) || []).length;
-    const semicolonCount = (firstLine.match(/;/g) || []).length;
+    let commaCount = 0;
+    let semicolonCount = 0;
+    let inQuotes = false;
+    
+    for (let i = 0; i < firstLine.length; i++) {
+        if (firstLine[i] === '"') {
+            // Check for escaped quote
+            if (inQuotes && i + 1 < firstLine.length && firstLine[i + 1] === '"') {
+                i++; // Skip escaped quote
+            } else {
+                inQuotes = !inQuotes;
+            }
+        } else if (!inQuotes) {
+            // Only count delimiters outside quotes
+            if (firstLine[i] === ',') commaCount++;
+            if (firstLine[i] === ';') semicolonCount++;
+        }
+    }
+    
     const delimiter = semicolonCount > commaCount ? ';' : ',';
     
     // Parse headers
@@ -427,41 +444,79 @@ function findCantEspeculadaColumn() {
     return -1;
 }
 
-// Parse a single CSV line (handles quoted values)
+// Parse a single CSV line (handles quoted values with commas inside)
 function parseCSVLine(line, delimiter) {
     const result = [];
     let current = '';
     let inQuotes = false;
+    let i = 0;
     
-    // Trim the line but preserve internal spaces
+    // Trim only leading/trailing whitespace from the entire line
     line = line.trim();
     
-    for (let i = 0; i < line.length; i++) {
+    while (i < line.length) {
         const char = line[i];
         
         if (char === '"') {
-            if (inQuotes && line[i + 1] === '"') {
-                // Escaped quote
-                current += '"';
-                i++;
+            if (inQuotes) {
+                // Check if this is an escaped quote (double quote)
+                if (i + 1 < line.length && line[i + 1] === '"') {
+                    // Escaped quote inside quoted field
+                    current += '"';
+                    i += 2;
+                    continue;
+                } else if (i + 1 < line.length && line[i + 1] === delimiter) {
+                    // End of quoted field, followed by delimiter
+                    inQuotes = false;
+                    i += 2;
+                    result.push(current);
+                    current = '';
+                    continue;
+                } else if (i + 1 >= line.length || line[i + 1] === '\n' || line[i + 1] === '\r') {
+                    // End of quoted field at end of line
+                    inQuotes = false;
+                    i++;
+                    break;
+                } else {
+                    // This might be a malformed CSV, but we'll treat it as end of quotes
+                    inQuotes = false;
+                }
             } else {
-                // Toggle quote state
-                inQuotes = !inQuotes;
+                // Start of quoted field
+                inQuotes = true;
             }
+            i++;
         } else if (char === delimiter && !inQuotes) {
-            // Found delimiter outside quotes
+            // Found delimiter outside quotes - end of field
             result.push(current);
             current = '';
+            i++;
         } else {
+            // Regular character
             current += char;
+            i++;
         }
     }
     
-    // Add the last field
-    result.push(current);
+    // Add the last field (if any)
+    if (current.length > 0 || !inQuotes) {
+        result.push(current);
+    } else if (inQuotes) {
+        // Field was not properly closed, but add it anyway
+        result.push(current);
+    }
     
-    // Trim each field (but preserve spaces inside quoted fields)
-    return result.map(field => field.trim());
+    // Clean up fields: remove surrounding quotes if present, but preserve content
+    return result.map(field => {
+        // Remove surrounding quotes if the field starts and ends with them
+        if (field.length >= 2 && field[0] === '"' && field[field.length - 1] === '"') {
+            field = field.slice(1, -1);
+        }
+        // Replace escaped quotes (double quotes) with single quotes
+        field = field.replace(/""/g, '"');
+        // Trim whitespace, but preserve internal spaces
+        return field.trim();
+    });
 }
 
 // Display CSV preview
@@ -574,15 +629,8 @@ function extractLinks() {
         }
     });
     
-    // Remove duplicates
-    const seen = new Set();
-    links = links.filter(link => {
-        if (seen.has(link.url)) {
-            return false;
-        }
-        seen.add(link.url);
-        return true;
-    });
+    // No remove duplicates - each CSV row should generate a separate SQL record
+    // even if URLs are the same, as they may have different values in other columns
     
     totalLinksSpan.textContent = `${links.length} link${links.length !== 1 ? 's' : ''} encontrado${links.length !== 1 ? 's' : ''}`;
 }
