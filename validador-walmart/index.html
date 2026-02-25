@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Validador Walmart</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-content">
+                <div class="header-text">
+                    <h1>🔍 Validador Walmart</h1>
+                    <p class="subtitle">Valida links entre Toma y Faltantes</p>
+                </div>
+                <div class="upload-section">
+                    <div class="upload-area" id="uploadArea">
+                        <input type="file" id="fileInput" accept=".xlsx,.xls" hidden>
+                        <div class="upload-content">
+                            <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="17 8 12 3 7 8"></polyline>
+                                <line x1="12" y1="3" x2="12" y2="15"></line>
+                            </svg>
+                            <p class="upload-text">Haz clic para seleccionar un archivo XLSX</p>
+                            <p class="upload-hint">o arrastra y suelta el archivo aquí</p>
+                            <p class="upload-hint" style="font-size: 0.75rem; margin-top: 5px; color: #999;">Debe contener 3 hojas: Categorias, Toma, Faltantes</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <div class="info-section" id="infoSection" style="display: none;">
+            <div class="info-card">
+                <h3>📊 Información del archivo</h3>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <span class="info-label">Hoja Categorias:</span>
+                        <span class="info-value" id="categoriasCount">-</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Hoja Toma:</span>
+                        <span class="info-value" id="tomaCount">-</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Hoja Faltantes:</span>
+                        <span class="info-value" id="faltantesCount">-</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="rules-section" id="rulesSection" style="display: none;">
+            <div class="rules-card">
+                <h3>🔧 Reglas de Matcheo Personalizadas</h3>
+                <p class="rules-hint">Define una expresión regular (regex) para extraer un patrón de las URLs y hacer match. El patrón extraído del Faltante se buscará dentro de los links de Consulta.</p>
+                <div class="rules-input-group">
+                    <label for="matchingRule">Regex de matcheo:</label>
+                    <input type="text" id="matchingRule" class="rules-input" placeholder='Ej: "\/id\/[0-9a-zA-Z\-]+"'>
+                    <button class="btn-apply-rule" id="applyRuleBtn">Aplicar Regla</button>
+                </div>
+                <div class="rules-example">
+                    <strong>Ejemplo:</strong> Si defines <code>\/id\/[0-9a-zA-Z\-]+</code>, extraerá "/id/effc5d16-3ab8-ed11-83fe-0022480ae5e9" y buscará ese bloque en los links de Consulta
+                </div>
+            </div>
+        </div>
+
+        <div class="results-section" id="resultsSection" style="display: none;">
+            <div class="results-header">
+                <h2>📋 Resultados de Validación</h2>
+                <div class="stats-summary">
+                    <span class="stat-item stat-found">
+                        <strong id="foundCount">0</strong> encontrados
+                    </span>
+                    <span class="stat-item stat-missing">
+                        <strong id="missingCount">0</strong> no encontrados
+                    </span>
+                </div>
+            </div>
+
+            <div class="tabs">
+                <button class="tab-button active" data-tab="found">✅ Disponibles en Toma</button>
+                <button class="tab-button" data-tab="missing">❌ No Disponibles</button>
+            </div>
+
+            <div class="tab-content">
+                <div class="tab-pane active" id="tab-found">
+                    <div class="table-container">
+                        <table class="results-table">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>LINK_FALTANTE</th>
+                                    <th>LINK_DE_CONSULTA (Match)</th>
+                                    <th>Fila en Faltantes</th>
+                                </tr>
+                            </thead>
+                            <tbody id="foundTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="tab-pane" id="tab-missing">
+                    <div class="table-container">
+                        <table class="results-table">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>LINK_FALTANTE</th>
+                                    <th>Fila en Faltantes</th>
+                                </tr>
+                            </thead>
+                            <tbody id="missingTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="actions-section">
+                <button class="btn-download" id="downloadFoundBtn">💾 Descargar Disponibles (.csv)</button>
+                <button class="btn-download" id="downloadMissingBtn">💾 Descargar No Disponibles (.csv)</button>
+            </div>
+        </div>
+
+        <div class="results-section" id="resultsWithRulesSection" style="display: none;">
+            <div class="results-header">
+                <h2>📋 Resultados con Reglas de Matcheo</h2>
+                <div class="stats-summary">
+                    <span class="stat-item stat-found">
+                        <strong id="foundWithRulesCount">0</strong> encontrados
+                    </span>
+                    <span class="stat-item stat-missing">
+                        <strong id="missingWithRulesCount">0</strong> no encontrados
+                    </span>
+                </div>
+            </div>
+
+            <div class="tabs">
+                <button class="tab-button active" data-tab-rules="found">✅ Disponibles en Toma (con regla)</button>
+                <button class="tab-button" data-tab-rules="missing">❌ No Disponibles (con regla)</button>
+            </div>
+
+            <div class="tab-content">
+                <div class="tab-pane active" id="tab-found-rules">
+                    <div class="table-container">
+                        <table class="results-table">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>LINK_FALTANTE</th>
+                                    <th>LINK_DE_CONSULTA (Match)</th>
+                                    <th>Patrón Matcheado</th>
+                                    <th>Fila en Faltantes</th>
+                                </tr>
+                            </thead>
+                            <tbody id="foundWithRulesTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="tab-pane" id="tab-missing-rules">
+                    <div class="table-container">
+                        <table class="results-table">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>LINK_FALTANTE</th>
+                                    <th>Fila en Faltantes</th>
+                                </tr>
+                            </thead>
+                            <tbody id="missingWithRulesTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="actions-section">
+                <button class="btn-download" id="downloadFoundWithRulesBtn">💾 Descargar Disponibles con Regla (.csv)</button>
+                <button class="btn-download" id="downloadMissingWithRulesBtn">💾 Descargar No Disponibles con Regla (.csv)</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

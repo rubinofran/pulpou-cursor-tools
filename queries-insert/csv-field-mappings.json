@@ -1,0 +1,22 @@
+{
+  "fieldMappings": [
+    {
+      "csvColumn": "cantEspeculada",
+      "fieldName": "cant_especulada",
+      "icon": "🔢",
+      "description": "Esta columna se usa como valor por defecto para cant_especulada"
+    },
+    {
+      "csvColumn": "idSite",
+      "fieldName": "id_site",
+      "icon": "🔗",
+      "description": "Esta columna se usa como valor por defecto para id_site"
+    },
+    {
+      "csvColumn": "maxPage",
+      "fieldName": "max_page",
+      "icon": "📄",
+      "description": "Esta columna se usa como valor por defecto para max_page"
+    }
+  ]
+}

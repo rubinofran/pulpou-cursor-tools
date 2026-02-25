@@ -24,6 +24,7 @@ let generatedQueries = [];
 let generatedQueriesFormatted = '';
 let tableConfig = null;
 let tagsConfig = null;
+let csvFieldMappings = null;
 
 // Load table configuration
 async function loadTableConfig() {
@@ -38,6 +39,15 @@ async function loadTableConfig() {
         } catch (error) {
             console.warn('tags-config.json not found, tags feature will be disabled');
             tagsConfig = { columnMappings: [] };
+        }
+        
+        // Load CSV field mappings configuration
+        try {
+            const csvMappingsResponse = await fetch('csv-field-mappings.json');
+            csvFieldMappings = await csvMappingsResponse.json();
+        } catch (error) {
+            console.warn('csv-field-mappings.json not found, CSV field mappings feature will be disabled');
+            csvFieldMappings = { fieldMappings: [] };
         }
         
         initializeForms();
@@ -433,15 +443,43 @@ function findUrlColumn() {
     return -1;
 }
 
-// Find cantEspeculada column index (case-insensitive, handles camelCase, snake_case, etc.)
-function findCantEspeculadaColumn() {
+// Find CSV column index by field mapping (case-insensitive, handles camelCase, snake_case, etc.)
+function findCSVColumnByMapping(csvColumnName) {
+    if (!csvColumnName) return -1;
+    
+    const normalizedTarget = csvColumnName.toLowerCase().trim().replace(/[_-]/g, '').replace(/\s+/g, '');
+    
     for (let i = 0; i < headers.length; i++) {
-        const normalizedHeader = headers[i].toLowerCase().trim().replace(/[_-]/g, '');
-        if (normalizedHeader === 'cantespeculada' || normalizedHeader === 'cant especulada') {
+        const normalizedHeader = headers[i].toLowerCase().trim().replace(/[_-]/g, '').replace(/\s+/g, '');
+        if (normalizedHeader === normalizedTarget) {
             return i;
         }
     }
     return -1;
+}
+
+// Find all CSV column indices for configured field mappings
+function findAllCSVFieldMappingColumns() {
+    const mappingIndices = {};
+    
+    if (!csvFieldMappings || !csvFieldMappings.fieldMappings) {
+        return mappingIndices;
+    }
+    
+    csvFieldMappings.fieldMappings.forEach(mapping => {
+        const index = findCSVColumnByMapping(mapping.csvColumn);
+        if (index !== -1) {
+            mappingIndices[mapping.fieldName] = {
+                csvIndex: index,
+                csvColumn: mapping.csvColumn,
+                fieldName: mapping.fieldName,
+                icon: mapping.icon || '📋',
+                description: mapping.description || ''
+            };
+        }
+    });
+    
+    return mappingIndices;
 }
 
 // Parse a single CSV line (handles quoted values with commas inside)
@@ -530,10 +568,32 @@ function isTagColumn(columnName) {
     );
 }
 
-// Check if a column is cantEspeculada (used for default value)
-function isCantEspeculadaColumn(columnName) {
+// Check if a column is mapped to a field (used for default value)
+function isMappedFieldColumn(columnName) {
+    if (!csvFieldMappings || !csvFieldMappings.fieldMappings) return false;
+    
     const normalizedColumn = columnName.toLowerCase().trim().replace(/[_-]/g, '').replace(/\s+/g, '');
-    return normalizedColumn === 'cantespeculada';
+    
+    return csvFieldMappings.fieldMappings.some(mapping => {
+        const normalizedMapping = mapping.csvColumn.toLowerCase().trim().replace(/[_-]/g, '').replace(/\s+/g, '');
+        return normalizedColumn === normalizedMapping;
+    });
+}
+
+// Get mapping info for a column name
+function getMappingInfoForColumn(columnName) {
+    if (!csvFieldMappings || !csvFieldMappings.fieldMappings) return null;
+    
+    const normalizedColumn = columnName.toLowerCase().trim().replace(/[_-]/g, '').replace(/\s+/g, '');
+    
+    for (const mapping of csvFieldMappings.fieldMappings) {
+        const normalizedMapping = mapping.csvColumn.toLowerCase().trim().replace(/[_-]/g, '').replace(/\s+/g, '');
+        if (normalizedColumn === normalizedMapping) {
+            return mapping;
+        }
+    }
+    
+    return null;
 }
 
 function displayCSVPreview() {
@@ -548,10 +608,10 @@ function displayCSVPreview() {
     headers.forEach((header, index) => {
         const headerText = header || `Columna ${index + 1}`;
         const isTag = isTagColumn(header);
-        const isCantEspeculada = isCantEspeculadaColumn(header);
+        const mappingInfo = getMappingInfoForColumn(header);
         const tagIcon = isTag ? ' <span class="tag-indicator" title="Esta columna se usa para generar etiquetas">🏷️</span>' : '';
-        const cantEspeculadaIcon = isCantEspeculada ? ' <span class="tag-indicator" title="Esta columna se usa como valor por defecto para cant_especulada">🔢</span>' : '';
-        previewHTML += `<th>${headerText}${tagIcon}${cantEspeculadaIcon}</th>`;
+        const mappingIcon = mappingInfo ? ` <span class="tag-indicator" title="${mappingInfo.description}">${mappingInfo.icon}</span>` : '';
+        previewHTML += `<th>${headerText}${tagIcon}${mappingIcon}</th>`;
     });
     previewHTML += '</tr></thead><tbody>';
     
@@ -591,8 +651,8 @@ function isValidURL(str) {
 function extractLinks() {
     links = [];
     
-    // Find cantEspeculada column if it exists
-    const cantEspeculadaColumnIndex = findCantEspeculadaColumn();
+    // Find all CSV column mappings
+    const fieldMappingColumns = findAllCSVFieldMappingColumns();
     
     csvData.forEach((row, rowIndex) => {
         const value = row[selectedColumn];
@@ -620,10 +680,13 @@ function extractLinks() {
                 csvRowIndex: rowIndex // Actual index in csvData array
             };
             
-            // Add cantEspeculada value if column exists
-            if (cantEspeculadaColumnIndex !== -1 && row[cantEspeculadaColumnIndex] && row[cantEspeculadaColumnIndex].trim() !== '') {
-                linkData.cantEspeculada = row[cantEspeculadaColumnIndex].trim();
-            }
+            // Add mapped field values if columns exist
+            Object.keys(fieldMappingColumns).forEach(fieldName => {
+                const mapping = fieldMappingColumns[fieldName];
+                if (row[mapping.csvIndex] && row[mapping.csvIndex].trim() !== '') {
+                    linkData[mapping.fieldName] = row[mapping.csvIndex].trim();
+                }
+            });
             
             links.push(linkData);
         }
@@ -966,11 +1029,15 @@ function generateSQLQueries() {
             mergedValues[urlField.name] = link.url;
         }
         
-        // Handle cant_especulada field (from CSV if exists, otherwise use default)
-        const cantEspeculadaField = tableConfig.fields.find(f => f.name === 'cant_especulada');
-        if (cantEspeculadaField && link.cantEspeculada !== undefined) {
-            // Use value from CSV if available
-            mergedValues[cantEspeculadaField.name] = link.cantEspeculada;
+        // Handle mapped fields from CSV (cant_especulada, id_site, max_page, etc.)
+        if (csvFieldMappings && csvFieldMappings.fieldMappings) {
+            csvFieldMappings.fieldMappings.forEach(mapping => {
+                const field = tableConfig.fields.find(f => f.name === mapping.fieldName);
+                if (field && link[mapping.fieldName] !== undefined) {
+                    // Use value from CSV if available
+                    mergedValues[mapping.fieldName] = link[mapping.fieldName];
+                }
+            });
         }
         
         // Build VALUES string for this link
@@ -1117,7 +1184,7 @@ function generateTagsFromCSV(csvRowIndex) {
     return tags;
 }
 
-// Get all CSV columns (except "url", tag columns, and cantEspeculada) for a specific row as an object
+// Get all CSV columns (except "url", tag columns, and mapped field columns) for a specific row as an object
 function getAllCSVColumnsForRow(csvRowIndex) {
     if (csvRowIndex < 0 || csvRowIndex >= csvData.length) {
         return {};
@@ -1137,8 +1204,8 @@ function getAllCSVColumnsForRow(csvRowIndex) {
             return;
         }
         
-        // Skip cantEspeculada column (it's used for the cant_especulada field, not for options)
-        if (isCantEspeculadaColumn(header)) {
+        // Skip mapped field columns (they're used for specific fields, not for options)
+        if (isMappedFieldColumn(header)) {
             return;
         }
         
