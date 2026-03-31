@@ -5,8 +5,10 @@ const path = require('path');
  * Procesa el CSV de variaciones y expande cada fila según sus variaciones
  */
 function procesarVariaciones() {
-  const inputFile = path.join('C:', 'Users', 'frale', 'Downloads', 'variaciones.csv');
+  // Leer siempre el CSV de la misma carpeta del script
+  const inputFile = path.join(__dirname, 'variaciones.csv');
   const outputFile = path.join(__dirname, 'variaciones_expandido.csv');
+  const erroresFile = path.join(__dirname, 'variaciones_errores.csv');
 
   console.log('📖 Leyendo archivo:', inputFile);
   
@@ -41,9 +43,12 @@ function procesarVariaciones() {
   const numColumnasEsperadas = columnas.length - 1 + 3;
   
   const filasExpandidas = [nuevoHeader.map(col => escapeCSVValue(col)).join(',')];
+  const headerErrores = [...columnas, 'MOTIVO_ERROR'];
+  const filasErroresCsv = [headerErrores.map(col => escapeCSVValue(col)).join(',')];
   
   let totalFilasOriginales = 0;
   let totalFilasExpandidas = 0;
+  let totalFilasOmitidasPorJsonInvalido = 0;
 
   // Procesar cada fila (empezar desde 1 para saltar el header)
   for (let i = 1; i < lineas.length; i++) {
@@ -86,8 +91,11 @@ function procesarVariaciones() {
         }
       } catch (parseError) {
         console.warn(`⚠️  Línea ${i + 1}: Error parseando JSON de variaciones:`, parseError.message);
-        // Si no se puede parsear, crear una fila con valores vacíos
-        variaciones = [{}];
+        // Si no se puede parsear, omitir este registro completo
+        totalFilasOmitidasPorJsonInvalido++;
+        const filaError = [...valores.map(v => escapeCSVValue(v)), escapeCSVValue(parseError.message)];
+        filasErroresCsv.push(filaError.join(','));
+        continue;
       }
 
       // Si no hay variaciones o está vacío, crear una fila con valores vacíos
@@ -186,11 +194,17 @@ function procesarVariaciones() {
   // Usar UTF-8 con BOM para mejor compatibilidad con Excel
   const BOM = '\uFEFF';
   fs.writeFileSync(outputFile, BOM + contenidoFinal, { encoding: 'utf8' });
+  
+  // Escribir archivo de errores (registros omitidos por JSON inválido)
+  const contenidoErrores = filasErroresCsv.join('\n');
+  fs.writeFileSync(erroresFile, BOM + contenidoErrores, { encoding: 'utf8' });
 
   console.log('\n✅ Procesamiento completado:');
   console.log(`   📊 Filas originales: ${totalFilasOriginales}`);
   console.log(`   📊 Filas expandidas: ${totalFilasExpandidas}`);
+  console.log(`   ⚠️  Filas omitidas por JSON inválido: ${totalFilasOmitidasPorJsonInvalido}`);
   console.log(`   💾 Archivo guardado en: ${outputFile}`);
+  console.log(`   🧾 Archivo de errores: ${erroresFile}`);
 }
 
 /**

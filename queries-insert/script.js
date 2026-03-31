@@ -26,34 +26,70 @@ let tableConfig = null;
 let tagsConfig = null;
 let csvFieldMappings = null;
 
+// Helper function to fetch with timeout
+async function fetchWithTimeout(url, timeout = 5000) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    
+    try {
+        const response = await fetch(url, { signal: controller.signal });
+        clearTimeout(timeoutId);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response;
+    } catch (error) {
+        clearTimeout(timeoutId);
+        if (error.name === 'AbortError') {
+            throw new Error(`Timeout: No se pudo cargar ${url} en ${timeout}ms`);
+        }
+        throw error;
+    }
+}
+
 // Load table configuration
 async function loadTableConfig() {
+    const loadingIndicator = document.getElementById('loadingIndicator');
+    if (loadingIndicator) {
+        loadingIndicator.style.display = 'block';
+    }
+    
     try {
-        const response = await fetch('config.json');
+        console.log('Cargando config.json...');
+        const response = await fetchWithTimeout('config.json', 5000);
         tableConfig = await response.json();
+        console.log('config.json cargado correctamente');
         
         // Load tags configuration
         try {
-            const tagsResponse = await fetch('tags-config.json');
+            console.log('Cargando tags-config.json...');
+            const tagsResponse = await fetchWithTimeout('tags-config.json', 5000);
             tagsConfig = await tagsResponse.json();
+            console.log('tags-config.json cargado correctamente');
         } catch (error) {
-            console.warn('tags-config.json not found, tags feature will be disabled');
+            console.warn('tags-config.json not found, tags feature will be disabled:', error.message);
             tagsConfig = { columnMappings: [] };
         }
         
         // Load CSV field mappings configuration
         try {
-            const csvMappingsResponse = await fetch('csv-field-mappings.json');
+            console.log('Cargando csv-field-mappings.json...');
+            const csvMappingsResponse = await fetchWithTimeout('csv-field-mappings.json', 5000);
             csvFieldMappings = await csvMappingsResponse.json();
+            console.log('csv-field-mappings.json cargado correctamente');
         } catch (error) {
-            console.warn('csv-field-mappings.json not found, CSV field mappings feature will be disabled');
+            console.warn('csv-field-mappings.json not found, CSV field mappings feature will be disabled:', error.message);
             csvFieldMappings = { fieldMappings: [] };
         }
         
         initializeForms();
     } catch (error) {
         console.error('Error loading config.json:', error);
-        showError('Error al cargar la configuración. Por favor, asegúrate de que config.json existe.');
+        showError(`Error al cargar la configuración: ${error.message}. Por favor, asegúrate de que config.json existe y el servidor está funcionando.`);
+    } finally {
+        if (loadingIndicator) {
+            loadingIndicator.style.display = 'none';
+        }
     }
 }
 
@@ -258,6 +294,12 @@ function processFile(file) {
     const fileName = file.name.toLowerCase();
     
     if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
+        // Check if XLSX library is available
+        if (typeof XLSX === 'undefined') {
+            showError('Error: La librería XLSX no está cargada. Por favor, recarga la página o verifica tu conexión a internet.');
+            return;
+        }
+        
         // Process XLSX file
         const reader = new FileReader();
         

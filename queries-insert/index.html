@@ -89,9 +89,14 @@
         </div>
 
         <div class="error-message" id="errorMessage" style="display: none;"></div>
+        
+        <div class="loading-indicator" id="loadingIndicator" style="display: none;">
+            <p>Cargando configuración...</p>
+        </div>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" 
+            onerror="console.error('Error cargando XLSX library'); document.getElementById('errorMessage').textContent='Error: No se pudo cargar la librería XLSX. Verifica tu conexión a internet.'; document.getElementById('errorMessage').style.display='block';"></script>
     <script src="script.js"></script>
 </body>
 </html>
